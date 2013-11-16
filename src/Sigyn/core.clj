@@ -1,7 +1,9 @@
 (ns Sigyn.core)
 
-; Working in eclipse (with the counterclockwise plugin), hit ctrl-alt-s to open the repl (command-alt-s for mac),
-; then load the desired namespace like (ns Sigyn.core).
+; Working in eclipse and the counterclockwise plugin, hit ctrl-alt-s to open the repl (command-alt-s for mac),
+; then load the desired namespace like (ns Sigyn.core). Hitting ctrl-alt-s should send new code to the repl
+; after you make any edits. I find that this sometimes fails. When this happens, I hit the green run button
+; instead. This starts a new repl rather than evaluating the code in the currnet repl.
 
 ; The currently favoured technique of defining your data structures in clojure is to use defrecord. These have
 ; the downside of not being imported with the rest of a namespace, because they are created as Java classes.
@@ -90,16 +92,25 @@ be produced."
 ; dosync somewhere in any function which calls that code). For now, I've placed it
 ; directly wrapping the call to alter.
 
-(defrecord hash-mem [hash]
+; The hashmap is nested; it's a map from patterns to item-value pairs matching the
+; pattern, and the item-value pairs are themselves stored in a map.
+
+(defrecord hash-mem [hash] ; note: this name shadows the clojure function 'hash', preventing us from using it
   Memory
   (query [this pattern]
-    (pattern (:hash this)))
+    ((:hash this) pattern))
   (insert [this item value]
     ; Generate all patterns consistent with the instance, and update the hash table
     ; to add the item/value pair to those entries, adding them if they don't exist.
-    (dosync
-      (alter hash ())) ; TODO: bit of code inserting [item value] to the result 
-                          ;      list for each key from (all-patterns item)
-    )
-  )
+    (->hash-mem
+      (reduce ; Alter takes a function to update the value with, not a new value!
+       conj 
+       (cons
+         hash
+         (map
+           (fn [p] (assoc (hash p) item value)) ; adds item-value pair if absent, overwrites if present
+           (all-patterns item)))))))
+
+(defn empty-hash-mem []
+  (->hash-mem (hash-map)))
   
